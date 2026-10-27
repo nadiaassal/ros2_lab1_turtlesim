@@ -23,3 +23,4 @@ ros2 launch turtle_control turtle_app.launch.py
 ### Bonus
 - Design Patterns: Facade Pattern used in reset_turtle service to encapsulate clear, teleport, and set_pen calls.
 - ROS Bag: Recorded topics /turtle1/cmd_vel and /turtle1/pose into my_square_bag.
+ <img width="963" height="402" alt="Screenshot from 2026-10-27 11-08-57" src="https://github.com/user-attachments/assets/8f57e779-77bf-4109-b15b-c3c88f503666" />
