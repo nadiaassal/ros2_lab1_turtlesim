@@ -100,12 +100,38 @@ class TurtleManagerNode(Node):
     def execute_goto_callback(self, goal_handle):
         target = goal_handle.request.target
         feedback_msg = GoToPose.Feedback()
-        rate = 0.05
+        rate = 0.02
 
         while self.current_pose is None:
             time.sleep(0.01)
 
-        # Phase 1: Move to target (x, y)
+        max_ang = self.get_parameter('max_angular_speed').value
+        max_lin = self.get_parameter('max_linear_speed').value
+
+        dx = target.x - self.current_pose.x
+        dy = target.y - self.current_pose.y
+        dist = math.hypot(dx, dy)
+
+        # Step 1: Rotate in-place towards waypoint
+        if dist > 0.05:
+            target_angle = math.atan2(dy, dx)
+            while True:
+                max_ang = self.get_parameter('max_angular_speed').value
+                angle_error = self.normalize_angle(target_angle - self.current_pose.theta)
+                if abs(angle_error) < 0.02:
+                    break
+
+                twist = Twist()
+                twist.linear.x = 0.0
+                twist.angular.z = max(-max_ang, min(max_ang, 2.5 * angle_error))
+                self.cmd_vel_pub.publish(twist)
+                time.sleep(rate)
+
+            # Momentary stop
+            self.cmd_vel_pub.publish(Twist())
+            time.sleep(0.05)
+
+        # Step 2: Drive straight along line (Pure translation with small orientation correction)
         while True:
             max_lin = self.get_parameter('max_linear_speed').value
             max_ang = self.get_parameter('max_angular_speed').value
@@ -117,45 +143,44 @@ class TurtleManagerNode(Node):
             feedback_msg.distance_to_goal = dist
             goal_handle.publish_feedback(feedback_msg)
 
-            if dist < 0.08:
+            if dist < 0.04:
                 break
 
             target_angle = math.atan2(dy, dx)
             angle_error = self.normalize_angle(target_angle - self.current_pose.theta)
 
             twist = Twist()
-            # If large angle error, rotate first
-            if abs(angle_error) > 0.2:
-                twist.angular.z = max(-max_ang, min(max_ang, 2.5 * angle_error))
-                twist.linear.x = 0.0
-            else:
-                twist.angular.z = max(-max_ang, min(max_ang, 1.5 * angle_error))
-                twist.linear.x = max(-max_lin, min(max_lin, 1.5 * dist))
-
-            self.cmd_vel_pub.publish(twist)
-            time.sleep(rate)
-
-        # Phase 2: Rotate to final yaw
-        while True:
-            max_ang = self.get_parameter('max_angular_speed').value
-            angle_error = self.normalize_angle(target.yaw - self.current_pose.theta)
-
-            if abs(angle_error) < 0.04:
-                break
-
-            twist = Twist()
-            twist.linear.x = 0.0
+            # If drifted, correct orientation while driving slowly
+            twist.linear.x = max(0.1, min(max_lin, 1.8 * dist))
             twist.angular.z = max(-max_ang, min(max_ang, 2.0 * angle_error))
             self.cmd_vel_pub.publish(twist)
             time.sleep(rate)
 
-        # Stop
+        # Stop at corner
+        self.cmd_vel_pub.publish(Twist())
+        time.sleep(0.05)
+
+        # Step 3: Align to final requested yaw
+        while True:
+            max_ang = self.get_parameter('max_angular_speed').value
+            angle_error = self.normalize_angle(target.yaw - self.current_pose.theta)
+
+            if abs(angle_error) < 0.02:
+                break
+
+            twist = Twist()
+            twist.linear.x = 0.0
+            twist.angular.z = max(-max_ang, min(max_ang, 2.5 * angle_error))
+            self.cmd_vel_pub.publish(twist)
+            time.sleep(rate)
+
+        # Full Stop
         self.cmd_vel_pub.publish(Twist())
 
         goal_handle.succeed()
         result = GoToPose.Result()
         result.success = True
-        result.final_distance = feedback_msg.distance_to_goal
+        result.final_distance = 0.0
         return result
 
     def execute_square_callback(self, goal_handle):
@@ -163,17 +188,23 @@ class TurtleManagerNode(Node):
         if side <= 0.0:
             side = 3.0
 
-        # 1. Reset first
+        # 1. Reset first to clean board
         self.reset_callback(Empty.Request(), Empty.Response())
         time.sleep(0.5)
 
-        # Corners calculation starting from (5.54, 5.54)
+        # Center start position
         x0, y0 = 5.544445, 5.544445
+
+        # Precise 4 corners with corresponding heading:
+        # Corner 1: Walk East -> face North (1.5708)
+        # Corner 2: Walk North -> face West (3.14159)
+        # Corner 3: Walk West -> face South (-1.5708)
+        # Corner 4: Walk South -> face East (0.0)
         corners = [
-            (x0 + side, y0, 0.0),
-            (x0 + side, y0 + side, 1.5708),
-            (x0, y0 + side, 3.1415),
-            (x0, y0, -1.5708)
+            (x0 + side, y0, 1.5708),
+            (x0 + side, y0 + side, 3.14159),
+            (x0, y0 + side, -1.5708),
+            (x0, y0, 0.0)
         ]
 
         feedback = DrawSquare.Feedback()
@@ -182,7 +213,6 @@ class TurtleManagerNode(Node):
             feedback.current_side = idx + 1
             goal_handle.publish_feedback(feedback)
 
-            # Send action goal internally
             g = GoToPose.Goal()
             g.target.x = cx
             g.target.y = cy
@@ -190,14 +220,14 @@ class TurtleManagerNode(Node):
 
             self.goto_action_client.wait_for_server()
             future = self.goto_action_client.send_goal_async(g)
-            
+
             while not future.done():
-                time.sleep(0.05)
-            
+                time.sleep(0.02)
+
             sub_handle = future.result()
             res_future = sub_handle.get_result_async()
             while not res_future.done():
-                time.sleep(0.05)
+                time.sleep(0.02)
 
         goal_handle.succeed()
         result = DrawSquare.Result()
