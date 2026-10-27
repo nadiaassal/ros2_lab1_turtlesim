@@ -1,0 +1,35 @@
+Run lab1:
+
+1st Terminal:
+
+source ~/ros2_ws/install/setup.bash
+ros2 launch turtle_control turtle_app.launch.py
+
+-------------
+2nd Terminal:
+
+source ~/ros2_ws/install/setup.bash
+
+-Square: ros2 action send_goal /draw_square turtle_interfaces/action/DrawSquare "{side_length: 2.5}" --feedback
+-Circle: ros2 topic pub /turtle1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 2.0}, angular: {z: 1.5}}" -r 10
+-GoToPos: ros2 action send_goal /go_to_pose turtle_interfaces/action/GoToPose "{target: {x: 8.0, y: 8.0, yaw: 1.57}}" --feedback
+-LiveSpeedLimits: ros2 service call /set_speed_limits turtle_interfaces/srv/SetSpeedLimits "{max_linear_speed: 1.0, max_angular_speed: 1.0}"
+-ResetTurtle: ros2 service call /reset_turtle std_srvs/srv/Empty
+
+-RecordBag: ros2 bag record /turtle1/cmd_vel -o my_square12_bag
+
+---Note: U should rename new folder (my_square_bag)
+
+-------------
+3rd Terminal:
+
+source ~/ros2_ws/install/setup.bash
+ros2 action send_goal /draw_square turtle_interfaces/action/DrawSquare "{side_length: 2.5}"
+
+--then after finish returns to 2nd terminal and press ctrl+C ,then
+
+- ros2 bag info ~/ros2_ws/my_square12_bag
+
+- cd ~/ros2_ws
+  ros2 bag play my_square12_bag
+
