@@ -36,6 +36,5 @@ ros2 launch turtle_control turtle_app.launch.py
 
 Recorded real-time motion and command data on topics `/turtle1/cmd_vel` and `/turtle1/pose` during the square trajectory.
 
-![ROS Bag Info](rosbag_info.png)
 
  <img width="963" height="402" alt="Screenshot from 2026-10-27 11-08-57" src="https://github.com/user-attachments/assets/8f57e779-77bf-4109-b15b-c3c88f503666" />
